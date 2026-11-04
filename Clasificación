@@ -1,0 +1,109 @@
+# %% Importar librerías
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+from sklearn.metrics import confusion_matrix
+
+np.random.seed(42)
+tf.random.set_seed(42)
+
+# %% 1. Cargar y preparar el dataset
+url = "https://download.mlcc.google.com/mledu-datasets/Rice_Cammeo_Osmancik.csv"
+raw_df = pd.read_csv(url)
+
+# Mezclar los datos aleatoriamente
+df = raw_df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# Convertir la columna Class a números (Cammeo = 0, Osmancik = 1)
+mapa_clases = {"Cammeo": 0, "Osmancik": 1}
+df["Class"] = df["Class"].map(mapa_clases)
+
+# Separar features (X) y target (y)
+features = ["Area", "Perimeter", "Major_Axis_Length", "Minor_Axis_Length", "Eccentricity", "Convex_Area", "Extent"]
+X = df[features].values
+y = df["Class"].values
+
+print("Datos listos. Filas:", len(df))
+print(df.head())
+
+# %% 2. Crear el modelo de clasificación binaria
+# Usamos Normalization para escalar y activación Sigmoide porque es binario
+modelo = tf.keras.models.Sequential()
+modelo.add(tf.keras.layers.Input(shape=(len(features),)))
+modelo.add(tf.keras.layers.Normalization(axis=-1))
+modelo.add(tf.keras.layers.Dense(units=1, activation="sigmoid"))
+
+modelo.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.005),
+    loss="binary_crossentropy", # Función de pérdida obligatoria para binario
+    metrics=["accuracy", tf.keras.metrics.Precision(name="precision"), tf.keras.metrics.Recall(name="recall")]
+)
+
+# Adaptamos la normalización a los datos
+modelo.layers[0].adapt(X)
+
+# %% 3. Entrenar el modelo
+print("\nEntrenando modelo...")
+historia = modelo.fit(
+    X, y,
+    epochs=30,
+    batch_size=100,
+    validation_split=0.2, # 20% para validación automática
+    verbose=0 # Cambia a 1 si quieres ver la barra
+)
+
+# Ver resultados finales de validación
+res = pd.DataFrame(historia.history)
+print(f"Accuracy final (Validación): {res['val_accuracy'].iloc[-1]:.4f}")
+
+# %% 4. Graficar curvas de aprendizaje
+plt.figure(figsize=(10, 4))
+
+# Gráfica de Loss
+plt.subplot(1, 2, 1)
+plt.plot(res["loss"], label="Train Loss")
+plt.plot(res["val_loss"], label="Val Loss")
+plt.title("Pérdida (Loss)")
+plt.legend()
+
+# Gráfica de Accuracy
+plt.subplot(1, 2, 2)
+plt.plot(res["accuracy"], label="Train Accuracy")
+plt.plot(res["val_accuracy"], label="Val Accuracy")
+plt.title("Precisión (Accuracy)")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# %% 5. Matriz de Confusión
+# Usamos los últimos datos (el 20% de validación que se separó arriba)
+n_val = int(len(X) * 0.2)
+X_val = X[-n_val:]
+y_val = y[-n_val:]
+
+# Predecir probabilidades (0 a 1) y convertirlas a clase (0 o 1) con umbral 0.5
+probabilidades = modelo.predict(X_val, verbose=0).flatten()
+predicciones = (probabilidades >= 0.5).astype(int)
+
+# Calcular matriz
+cm = confusion_matrix(y_val, predicciones)
+
+# Graficar Matriz
+plt.figure(figsize=(5, 4))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+            xticklabels=["Cammeo (0)", "Osmancik (1)"], 
+            yticklabels=["Cammeo (0)", "Osmancik (1)"])
+plt.xlabel("Predicción del Modelo")
+plt.ylabel("Dato Real")
+plt.title("Matriz de Confusión")
+plt.show()
+
+# %% 6. Pequeña explicación de Métricas
+print("\n--- CÓMO LEER LA MATRIZ ---")
+print(f"Verdaderos Positivos (Osmancik correctos): {cm[1,1]}")
+print(f"Verdaderos Negativos (Cammeo correctos): {cm[0,0]}")
+print(f"Falsos Positivos (Cammeo clasificado como Osmancik): {cm[0,1]}")
+print(f"Falsos Negativos (Osmancik clasificado como Cammeo): {cm[1,0]}")
