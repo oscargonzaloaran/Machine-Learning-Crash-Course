@@ -1,0 +1,118 @@
+%% Importar librerías
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+
+np.random.seed(42)
+tf.random.set_seed(42)
+
+# %% 1. Cargar y limpiar datos
+url = "https://download.mlcc.google.com/mledu-datasets/chicago_taxi_train.csv"
+raw_df = pd.read_csv(url)
+
+# Mezclamos los datos para que el entrenamiento sea aleatorio
+raw_df = raw_df.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# Nos quedamos solo con las numéricas que vamos a usar y quitamos nulos
+columnas = ["TRIP_MILES", "TRIP_SECONDS", "FARE", "TIPS"]
+df = raw_df[columnas].dropna().reset_index(drop=True)
+
+print("Datos listos. Filas:", len(df))
+
+# %% 2. Exploración (EDA)
+print(df.head())
+
+# Vemos la correlación con la tarifa
+corr = df.corr()
+print("\nCorrelación con FARE:\n", corr["FARE"].sort_values(ascending=False))
+
+# Mapa de calor simple
+plt.figure(figsize=(6, 5))
+sns.heatmap(corr, annot=True, cmap="viridis")
+plt.title("Correlación de variables")
+plt.show()
+
+# %% 3. Función básica para crear el modelo
+def crear_modelo(num_features):
+    modelo = tf.keras.models.Sequential()
+    modelo.add(tf.keras.layers.Input(shape=(num_features,)))
+    # La capa de normalización ajusta la escala de los datos automáticamente
+    modelo.add(tf.keras.layers.Normalization(axis=-1)) 
+    modelo.add(tf.keras.layers.Dense(units=1))
+    
+    modelo.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.01),
+        loss="mean_squared_error",
+        metrics=[tf.keras.metrics.RootMeanSquaredError(name="rmse")]
+    )
+    return modelo
+
+# %% 4. Experimento A: Solo usar las millas (TRIP_MILES)
+X_a = df[["TRIP_MILES"]].values
+y = df["FARE"].values
+
+modelo_a = crear_modelo(num_features=1)
+
+# Adaptamos la normalización a los datos de entrada
+modelo_a.layers[0].adapt(X_a)
+
+print("\nEntrenando Modelo A (Millas)...")
+historia_a = modelo_a.fit(
+    X_a, y,
+    epochs=25,
+    batch_size=50,
+    validation_split=0.2,
+    verbose=0 # Pon 1 si quieres ver la barra de progreso
+)
+
+res_a = pd.DataFrame(historia_a.history)
+print(f"RMSE final Modelo A - Validación: {res_a['val_rmse'].iloc[-1]:.4f}")
+
+# Gráfica de error del modelo A
+plt.plot(res_a["rmse"], label="Entrenamiento")
+plt.plot(res_a["val_rmse"], label="Validación")
+plt.title("Error Modelo A (TRIP_MILES)")
+plt.legend()
+plt.show()
+
+# Dibujar la línea de regresión sobre los datos reales
+# Generamos puntos del min al max de millas para trazar la recta
+x_linea = np.linspace(df["TRIP_MILES"].min(), df["TRIP_MILES"].max(), 100)
+y_pred = modelo_a.predict(x_linea, verbose=0)
+
+plt.scatter(df["TRIP_MILES"].head(2000), df["FARE"].head(2000), alpha=0.3, label="Datos")
+plt.plot(x_linea, y_pred, color="red", linewidth=2, label="Predicción")
+plt.xlabel("Millas")
+plt.ylabel("Tarifa (USD)")
+plt.legend()
+plt.show()
+
+
+# %% 5. Experimento B: Usar Millas y Segundos
+X_b = df[["TRIP_MILES", "TRIP_SECONDS"]].values
+
+modelo_b = crear_modelo(num_features=2)
+modelo_b.layers[0].adapt(X_b)
+
+print("\nEntrenando Modelo B (Millas + Segundos)...")
+historia_b = modelo_b.fit(
+    X_b, y,
+    epochs=25,
+    batch_size=50,
+    validation_split=0.2,
+    verbose=0
+)
+
+res_b = pd.DataFrame(historia_b.history)
+print(f"RMSE final Modelo B - Validación: {res_b['val_rmse'].iloc[-1]:.4f}")
+
+# Comparamos el error de los dos modelos
+plt.plot(res_a["val_rmse"], label="A: Solo Millas")
+plt.plot(res_b["val_rmse"], label="B: Millas + Segundos")
+plt.title("Comparación del Error (Validación)")
+plt.xlabel("Épocas")
+plt.ylabel("RMSE")
+plt.legend()
+plt.show()
