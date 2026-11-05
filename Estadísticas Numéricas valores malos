@@ -1,0 +1,63 @@
+# Paso 1: Cargar los datos
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+url = "https://download.mlcc.google.com/mledu-datasets/california_housing_train.csv"
+datos = pd.read_csv(url)
+
+# Vemos cuántas filas hay al principio y las primeras filas
+print("Filas iniciales:", len(datos))
+print(datos.head())
+
+# Paso 2: Detectar "bad values" (nulos y anomalías)
+# Contamos los valores nulos (NaN) por columna
+print("Valores nulos por columna:")
+print(datos.isnull().sum())
+
+# Resumen estadístico para buscar valores extraños
+print("\nResumen estadístico:")
+print(datos.describe())
+
+print("\nQué buscar aquí:")
+print("- Fíjate en el máximo de total_rooms y population: ¿es físicamente improbable?")
+print("- Si el máximo es enorme comparado con la media y el 75%, es un outlier extremo.")
+print("- Los nulos aparecen como números mayores que 0 en isnull().sum().")
+
+# Paso 3: Limpieza de datos
+
+# Técnica 1: rellenar nulos con la mediana (imputación)
+# Aunque este CSV viene limpio, dejamos el ejemplo con total_bedrooms
+mediana_dormitorios = datos["total_bedrooms"].median()
+datos["total_bedrooms"] = datos["total_bedrooms"].fillna(mediana_dormitorios)
+print("Mediana usada para rellenar total_bedrooms:", mediana_dormitorios)
+print("Nulos restantes en total_bedrooms:", datos["total_bedrooms"].isnull().sum())
+
+# Técnica 2: recortar valores atípicos (clipping)
+# Guardamos una copia del original para comparar después
+total_rooms_original = datos["total_rooms"].copy()
+
+# Todo lo que pase de 10000 se convierte en 10000
+datos["total_rooms"] = datos["total_rooms"].clip(upper=10000)
+print("\nMáximo de total_rooms antes del clipping:", total_rooms_original.max())
+print("Máximo de total_rooms después del clipping:", datos["total_rooms"].max())
+
+# Paso 4: Visualizar y verificar la limpieza
+# Dos histogramas lado a lado: antes y después
+fig, ejes = plt.subplots(1, 2, figsize=(12, 4))
+
+sns.histplot(total_rooms_original, bins=50, ax=ejes[0])
+ejes[0].set_title("Antes (total_rooms original)")
+ejes[0].set_xlabel("Total de habitaciones")
+
+sns.histplot(datos["total_rooms"], bins=50, ax=ejes[1])
+ejes[1].set_title("Después (clipping a 10,000)")
+ejes[1].set_xlabel("Total de habitaciones")
+
+plt.show()
+
+print("En el gráfico de la derecha la cola larga desaparece y se acumula en 10,000.")
+
+# Confirmamos con describe() que el máximo ahora es 10,000
+print("\nResumen de total_rooms ya limpia:")
+print(datos["total_rooms"].describe())
