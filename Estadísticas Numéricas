@@ -1,0 +1,57 @@
+# Paso 1: Cargar los datos
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+url = "https://download.mlcc.google.com/mledu-datasets/california_housing_train.csv"
+datos = pd.read_csv(url)
+
+# Mostramos las primeras filas para ver qué pinta tienen
+print("Primeras filas del dataset:")
+print(datos.head())
+
+# Paso 2: Estadísticas descriptivas
+resumen = datos.describe()
+print(resumen)
+
+print("\nQué buscar aquí:")
+print("- Compara el valor máximo (max) con la media (mean) y el percentil 75% de cada columna.")
+print("- Si el máximo es muchísimo mayor que el 75%, puede haber valores atípicos o errores.")
+print("- Por ejemplo, fíjate en total_rooms y population.")
+
+# Paso 3: Histogramas
+# Histograma del valor medio de las casas
+plt.figure(figsize=(8, 4))
+plt.hist(datos["median_house_value"], bins=50)
+plt.title("Distribución de median_house_value")
+plt.xlabel("Valor medio de la casa")
+plt.ylabel("Frecuencia")
+plt.show()
+
+# Histograma del total de habitaciones
+plt.figure(figsize=(8, 4))
+plt.hist(datos["total_rooms"], bins=50)
+plt.title("Distribución de total_rooms")
+plt.xlabel("Total de habitaciones")
+plt.ylabel("Frecuencia")
+plt.show()
+
+print("Qué buscar aquí:")
+print("- Una distribución normal tiene forma de campana, simétrica.")
+print("- Si hay una cola larga hacia la derecha, los datos están sesgados (skewed).")
+print("- total_rooms tiene una cola muy larga: casi todos los datos están a la izquierda.")
+
+# Paso 4: Detección visual de outliers con boxplot
+plt.figure(figsize=(8, 3))
+sns.boxplot(x=datos["total_rooms"])
+plt.title("Boxplot de total_rooms")
+plt.show()
+
+print("Los puntitos que quedan fuera de los bigotes son los valores atípicos (outliers).")
+print("Son valores muy alejados del resto de los datos (más allá de 1.5 veces el rango intercuartílico).")
+print("Pueden ser errores de datos o casos reales poco comunes, y conviene revisarlos.")
+plt.show()
+
+print("Los puntitos que quedan fuera de los bigotes son los valores atípicos (outliers).")
+print("Son valores muy alejados del resto de los datos (más allá de 1.5 veces el rango intercuartílico).")
+print("Pueden ser errores de datos o casos reales poco comunes, y conviene revisarlos.")
