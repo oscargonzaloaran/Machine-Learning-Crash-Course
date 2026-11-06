@@ -1,0 +1,118 @@
+# Paso 1: Cargar los datos
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_score, recall_score
+
+url = "https://download.mlcc.google.com/mledu-datasets/adult_census_train.csv"
+datos = pd.read_csv(url)
+
+print("Filas:", len(datos))
+print(datos.head())
+
+# Paso 2: Preparación de datos
+
+# Target: pasamos income_bracket a 0 (<=50K) y 1 (>50K)
+# Usamos strip() por si los textos traen espacios al principio
+datos["objetivo"] = (datos["income_bracket"].str.strip() == ">50K").astype(int)
+
+# Atributo sensible: lo limpiamos igual y lo conservamos
+datos["gender"] = datos["gender"].str.strip()
+
+# Features numéricas simples
+columnas = ["age", "education_num", "hours_per_week"]
+
+# Dividimos en entrenamiento (80%) y validación (20%) con pandas
+entrenamiento = datos.sample(frac=0.8, random_state=42)
+validacion = datos.drop(entrenamiento.index)
+
+# Normalizamos a mano usando la media y desviación del entrenamiento
+media = entrenamiento[columnas].mean()
+desviacion = entrenamiento[columnas].std()
+
+x_train = ((entrenamiento[columnas] - media) / desviacion).values
+y_train = entrenamiento["objetivo"].values
+
+x_val = ((validacion[columnas] - media) / desviacion).values
+y_val = validacion["objetivo"].values
+
+print("Filas de entrenamiento:", len(x_train))
+print("Filas de validación:", len(x_val))
+print("Porcentaje de personas con ingresos >50K:", round(y_train.mean() * 100, 1), "%")
+
+# Paso 3: Entrenar un modelo básico (regresión logística)
+modelo = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(len(columnas),)),
+    tf.keras.layers.Dense(1, activation="sigmoid")
+])
+
+modelo.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.01),
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+historial = modelo.fit(x_train, y_train, epochs=10, batch_size=64,
+                       validation_data=(x_val, y_val), verbose=1)
+
+# Paso 4: Evaluación de equidad
+# Predicciones sobre validación (probabilidades entre 0 y 1)
+probabilidades = modelo.predict(x_val).flatten()
+
+# Umbral de decisión. Lo bajamos a 0.3 porque pocas personas ganan >50K
+# y con 0.5 el modelo casi nunca predeciría la clase positiva
+umbral = 0.3
+predicciones = (probabilidades >= umbral).astype(int)
+
+# Dividimos la validación por el atributo sensible
+es_mujer = (validacion["gender"] == "Female").values
+es_hombre = (validacion["gender"] == "Male").values
+
+# Resultados de las mujeres
+matriz_mujeres = confusion_matrix(y_val[es_mujer], predicciones[es_mujer])
+precision_mujeres = precision_score(y_val[es_mujer], predicciones[es_mujer], zero_division=0)
+recall_mujeres = recall_score(y_val[es_mujer], predicciones[es_mujer], zero_division=0)
+
+print("=== MUJERES ===")
+print("Matriz de confusión (filas = real, columnas = predicho):")
+print(matriz_mujeres)
+print("Precisión:", round(precision_mujeres, 3))
+print("Exhaustividad (recall):", round(recall_mujeres, 3))
+
+# Resultados de los hombres
+matriz_hombres = confusion_matrix(y_val[es_hombre], predicciones[es_hombre])
+precision_hombres = precision_score(y_val[es_hombre], predicciones[es_hombre], zero_division=0)
+recall_hombres = recall_score(y_val[es_hombre], predicciones[es_hombre], zero_division=0)
+
+print("\n=== HOMBRES ===")
+print("Matriz de confusión (filas = real, columnas = predicho):")
+print(matriz_hombres)
+print("Precisión:", round(precision_hombres, 3))
+print("Exhaustividad (recall):", round(recall_hombres, 3))
+
+# Paso 5: Visualización y conclusiones
+etiquetas = ["Precisión", "Recall"]
+valores_mujeres = [precision_mujeres, recall_mujeres]
+valores_hombres = [precision_hombres, recall_hombres]
+
+posiciones = np.arange(len(etiquetas))
+ancho = 0.35
+
+plt.figure(figsize=(7, 4))
+plt.bar(posiciones - ancho / 2, valores_mujeres, ancho, label="Mujeres")
+plt.bar(posiciones + ancho / 2, valores_hombres, ancho, label="Hombres")
+plt.xticks(posiciones, etiquetas)
+plt.ylabel("Valor")
+plt.ylim(0, 1)
+plt.title("Precisión y Recall por género")
+plt.legend()
+plt.show()
+
+print("Cómo interpretar el gráfico:")
+print("- Si el recall es mucho más bajo para las mujeres, el modelo falla más al")
+print("  identificar a las mujeres que sí ganan >50K (más falsos negativos).")
+print("- Si la precisión es más baja en un grupo, el modelo se equivoca más")
+print("  cuando predice >50K para ese grupo (más falsos positivos).")
+print("- Una diferencia grande entre grupos indica un posible sesgo que hay que revisar.")
+print("- Ojo: parte de la diferencia puede venir de los propios datos de entrenamiento.")
